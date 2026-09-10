@@ -466,7 +466,31 @@ async function startSession(freshLogin=false){
  if(!data.settings.ownerName&&session.ownerName){data.settings.ownerName=session.ownerName;seeded=true}if((!data.settings.platformName||data.settings.platformName===defaults.settings.platformName)&&session.companyName){data.settings.platformName=session.companyName;seeded=true}if(seeded)save('settings',false);
  const owner=data.settings.ownerName||session.ownerName||session.actorName||'';$('#actorLabel').textContent=session.actorName||owner||(session.actorType==='employee'?'موظف':'صاحب الحساب');$('#drawerActor').textContent=session.actorName||owner||'صاحب الحساب';$('#drawerName').textContent=session.companyName||data.settings.platformName||'الأحمدي';
  AhmadiCloud.attach(adapter(),session);AhmadiCloud.onStatus(setSyncStatus);render();
- try{await AhmadiCloud.initialSync();if(!freshLogin){const validated=await AhmadiCloud.validateUser(session);if(validated===false){AhmadiCloud.detach();localStorage.removeItem(SESSION_KEY);session=null;$('#appView').classList.add('hidden');$('#loginView').classList.remove('hidden');toast('تم تغيير أو إيقاف بيانات الدخول. سجل الدخول من جديد.','تنبيه');return;}if(validated&&typeof validated==='object'){session=validated;localStorage.setItem(SESSION_KEY,JSON.stringify(session));$('#actorLabel').textContent=session.actorName||session.ownerName||'صاحب الحساب';$('#drawerActor').textContent=session.actorName||session.ownerName||'صاحب الحساب';$('#drawerName').textContent=session.companyName||data.settings.platformName||'الأحمدي';}}render();}catch(_){/* Offline-first */}
+
+ // Never keep the login screen waiting for network sync. Local data is shown immediately;
+ // validation and cloud refresh continue silently after the first paint.
+ const backgroundSessionWork=async()=>{
+   try{
+     const needsValidation=!freshLogin||session?.fastCached===true;
+     if(needsValidation){
+       const validated=await AhmadiCloud.validateUser(session);
+       if(validated===false){
+         AhmadiCloud.detach();localStorage.removeItem(SESSION_KEY);session=null;
+         $('#appView').classList.add('hidden');$('#loginView').classList.remove('hidden');
+         toast('تم تغيير أو إيقاف بيانات الدخول. سجل الدخول من جديد.','تنبيه');return;
+       }
+       if(validated&&typeof validated==='object'){
+         session={...validated,fastCached:false,offline:false};localStorage.setItem(SESSION_KEY,JSON.stringify(session));
+         $('#actorLabel').textContent=session.actorName||session.ownerName||'صاحب الحساب';
+         $('#drawerActor').textContent=session.actorName||session.ownerName||'صاحب الحساب';
+         $('#drawerName').textContent=session.companyName||data.settings.platformName||'الأحمدي';
+       }
+     }
+     await AhmadiCloud.initialSync();render();
+   }catch(_){/* Offline-first: keep local session/data available */}
+ };
+ setTimeout(()=>backgroundSessionWork(),0);
+ return true;
 }
 async function restoreSession(){const raw=localStorage.getItem(SESSION_KEY);if(!raw)return;try{session=JSON.parse(raw);if(!session?.companyId||!session?.username)return;await startSession()}catch(_){localStorage.removeItem(SESSION_KEY)}}
 

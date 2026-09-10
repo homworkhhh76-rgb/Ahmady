@@ -296,28 +296,48 @@
   async function loginUser(username,password){
     const user=normalizeCredential(username),pass=normalizeCredential(password),hash=sha256(pass);
     if(!user||!pass)throw new Error('اسم المستخدم وكلمة المرور مطلوبان.');
-    if(!isOnline()){
-      const cached=readUserAuth(user,hash);if(!cached)throw new Error('أول تسجيل دخول بهذه البيانات يحتاج اتصالاً بالإنترنت.');return {...cached,offline:true};
+
+    // Instant path: credentials that succeeded before on this device open immediately.
+    // Their server status is revalidated in the background by startSession().
+    const cached=readUserAuth(user,hash);
+    if(cached){
+      const quick={...cached,username:user,authHash:hash,fastCached:true,offline:!isOnline(),cachedAt:Number(cached.cachedAt||nowMs())};
+      activeCompany={...quick};
+      return quick;
     }
-    await ensureSchema();
+    if(!isOnline())throw new Error('أول تسجيل دخول بهذه البيانات يحتاج اتصالاً بالإنترنت.');
+
+    // Do not block every login on schema CREATE/PRAGMA round trips. Production tables
+    // already exist; schema self-heal runs after a successful login in the background.
     const ownerRows=await subscriptionRowsByCredentials(user,pass);
     if(ownerRows.length){
       const row=ownerRows[0];assertSubscriptionAvailable(row);
-      const subName=await subscriberNameFor(row.company_id,row.subscriber_id);
       const companyId=networkCompanyId(row.company_id,row.subscription_id);
-      const actorName=String(row.manager_name||subName||user||'صاحب الحساب');
+      const actorName=String(row.manager_name||user||'صاحب الحساب');
       const session={companyId,parentCompanyId:row.company_id,subscriptionId:row.subscription_id,subscriberId:row.subscriber_id||'',username:user,companyName:String(row.network_name||'شبكة الكهرباء'),ownerName:actorName,actorType:'owner',actorId:row.subscription_id,actorName,permissions:['*'],subscriptionType:row.subscription_type||'',subscriptionEndDate:row.end_date||'',authHash:hash,cachedAt:nowMs()};
-      cacheUserAuth(session);activeCompany={...session};return session;
+      cacheUserAuth(session);activeCompany={...session};
+      ensureSchema().catch(()=>{});
+      return session;
     }
+
     // Employee accounts created inside the users app also use username + password.
-    const [empResult]=await pipeline([{sql:`SELECT id,company_id,name,username,status,permissions,password_hash,created_at,updated_at FROM ${tables.employees} WHERE lower(username)=lower(?) AND password_hash=? AND company_id LIKE 'network::%' LIMIT 2`,args:[user,hash]}]);
+    let empResult;
+    try{
+      [empResult]=await pipeline([{sql:`SELECT id,company_id,name,username,status,permissions,password_hash,created_at,updated_at FROM ${tables.employees} WHERE lower(username)=lower(?) AND password_hash=? AND company_id LIKE 'network::%' LIMIT 2`,args:[user,hash]}]);
+    }catch(firstError){
+      // Only pay the schema setup cost if this installation/database actually needs it.
+      await ensureSchema();
+      [empResult]=await pipeline([{sql:`SELECT id,company_id,name,username,status,permissions,password_hash,created_at,updated_at FROM ${tables.employees} WHERE lower(username)=lower(?) AND password_hash=? AND company_id LIKE 'network::%' LIMIT 2`,args:[user,hash]}]);
+    }
     const emp=rowsToObjects(empResult)[0];
     if(!emp)throw new Error('اسم المستخدم أو كلمة المرور غير صحيحة.');
     if(emp.status!=='active')throw new Error('حساب الموظف موقوف.');
     const parts=parseNetworkCompanyId(emp.company_id);if(!parts)throw new Error('تعذر تحديد الاشتراك المرتبط بحساب الموظف.');
     const source=await subscriptionRowById(parts.parentCompanyId,parts.subscriptionId);assertSubscriptionAvailable(source);
     const session={companyId:emp.company_id,parentCompanyId:parts.parentCompanyId,subscriptionId:parts.subscriptionId,subscriberId:source?.subscriber_id||'',username:user,companyName:String(source?.network_name||'شبكة الكهرباء'),ownerName:String(source?.manager_name||''),actorType:'employee',actorId:emp.id,employeeId:emp.id,actorName:emp.name||user,permissions:safeJson(emp.permissions,[])||[],employeeUpdatedAt:Number(emp.updated_at||0),authHash:hash,cachedAt:nowMs()};
-    cacheUserAuth(session);activeCompany={...session};return session;
+    cacheUserAuth(session);activeCompany={...session};
+    ensureSchema().catch(()=>{});
+    return session;
   }
   async function validateUser(session){
     if(!session?.companyId)return false;if(!isOnline())return true;await ensureSchema();

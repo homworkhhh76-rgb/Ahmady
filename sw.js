@@ -1,4 +1,4 @@
-const CACHE='ahmadi-users-v31.3.0';
+const CACHE='ahmadi-users-v31.4.0';
 const ASSETS=['./','./index.html','./styles.css?v=30.0.0','./app.js?v=30.0.0','./r2-storage.js?v=30.0.0','./turso-config.js','./turso-sync.js?v=30.0.0','./manifest.webmanifest','./logo.jpg','./icon-192.png','./icon-512.png'];
 self.addEventListener('install',e=>e.waitUntil(caches.open(CACHE).then(c=>c.addAll(ASSETS)).then(()=>self.skipWaiting())));
 self.addEventListener('activate',e=>e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim())));
