@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0b2f3a">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <title>الأحمدي لإدارة الكهرباء</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icon-192.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css?v=31.1.0">
+</head>
+<body>
+  <section id="loginView" class="login-view">
+    <div class="login-card">
+      <div class="brand-lockup">
+        <img src="logo.jpg" alt="شعار الأحمدي" class="brand-logo">
+        <div><strong>الأحمدي</strong><span>إدارة المشتركين والكهرباء</span></div>
+      </div>
+      <div class="login-copy">
+        <span class="eyebrow">تطبيق المستخدمين</span>
+        <h1>تسجيل الدخول</h1>
+        <p>استخدم اسم المستخدم وكلمة المرور التي تم إنشاؤهما لك من اشتراك منصة الأحمدي.</p>
+      </div>
+      <form id="loginForm" class="login-form" autocomplete="on">
+        <label class="field"><span>اسم المستخدم</span><input id="username" autocomplete="username" placeholder="أدخل اسم المستخدم" autocapitalize="none" spellcheck="false" required></label>
+        <label class="field"><span>كلمة المرور</span><input id="password" type="password" autocomplete="current-password" placeholder="أدخل كلمة المرور" required></label>
+        <button class="primary-btn" type="submit"><span>دخول إلى المنصة</span><span class="btn-icon" data-icon="arrow-left"></span></button>
+      </form>
+      <div class="login-meta"><span id="loginHint">بيانات الدخول هي نفسها الموجودة في تفاصيل الاشتراك. يعمل بدون إنترنت بعد أول تسجيل ناجح.</span></div>
+    </div>
+  </section>
+
+  <section id="appView" class="app-shell hidden">
+    <header class="topbar">
+      <div class="topbar-main">
+        <button id="drawerBtn" class="icon-btn" type="button" aria-label="القائمة"><span data-icon="menu"></span></button>
+        <div class="topbar-title"><small id="actorLabel">صاحب الحساب</small><strong id="pageTitle">الرئيسية</strong></div>
+      </div>
+      <div class="topbar-actions">
+        <button id="installBtn" class="install-btn" type="button"><span data-icon="download"></span><span>تثبيت</span></button>
+        <button id="globalSearchBtn" class="icon-btn" type="button" aria-label="بحث"><span data-icon="search"></span></button>
+      </div>
+    </header>
+
+    <aside id="drawer" class="drawer" aria-hidden="true">
+      <div class="drawer-head">
+        <img id="drawerLogo" src="logo.jpg" alt="الشعار">
+        <div><strong id="drawerName">الأحمدي</strong><small id="drawerActor">صاحب الحساب</small></div>
+        <button id="drawerClose" class="icon-btn dark" type="button"><span data-icon="x"></span></button>
+      </div>
+      <nav id="drawerNav" class="drawer-nav"></nav>
+      <div class="drawer-footer">
+        <button id="syncNowBtn" class="drawer-action" type="button"><span data-icon="refresh"></span><span>تحديث البيانات</span></button>
+        <button id="logoutBtn" class="drawer-action danger" type="button"><span data-icon="logout"></span><span>تسجيل الخروج</span></button>
+      </div>
+    </aside>
+    <button id="drawerBackdrop" class="drawer-backdrop" type="button" aria-label="إغلاق"></button>
+
+    <main id="mainContent" class="main-content"></main>
+    <nav id="bottomNav" class="bottom-nav"></nav>
+    <div id="fabRoot" class="fab-root"></div>
+  </section>
+
+  <div id="modalRoot"></div>
+  <div id="toastRoot" class="toast-root" aria-live="polite"></div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/aws-sdk/2.1500.0/aws-sdk.min.js"></script>
+  <script src="r2-storage.js?v=30.0.0"></script>
+  <script src="turso-config.js"></script>
+  <script src="turso-sync.js?v=30.0.0"></script>
+  <script src="app.js?v=31.1.0"></script>
+</body>
+</html>
