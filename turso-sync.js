@@ -10,7 +10,8 @@
     state: String(cfg.tables?.state || 'ahmadi_state').replace(/[^a-zA-Z0-9_]/g,''),
     admins: String(cfg.tables?.admins || 'ahmadi_admins').replace(/[^a-zA-Z0-9_]/g,''),
     employees: String(cfg.tables?.employees || 'ahmadi_employees').replace(/[^a-zA-Z0-9_]/g,''),
-    subscriptionUsers: String(cfg.tables?.subscriptionUsers || 'ahmadi_subscription_users').replace(/[^a-zA-Z0-9_]/g,'')
+    subscriptionUsers: String(cfg.tables?.subscriptionUsers || 'ahmadi_subscription_users').replace(/[^a-zA-Z0-9_]/g,''),
+    subscriberAccounts: String(cfg.tables?.subscriberAccounts || 'ahmadi_subscriber_accounts').replace(/[^a-zA-Z0-9_]/g,'')
   };
   const syncCfg = {
     visiblePollMs: Math.max(2500, Number(cfg.sync?.visiblePollMs || 4000)),
@@ -24,6 +25,8 @@
   const USER_AUTH_PREFIX = 'AHMADI_USERS_AUTH_V2::';
   const EMPLOYEE_CACHE_PREFIX = 'AHMADI_EMPLOYEE_CACHE_V1::';
   const EMPLOYEE_QUEUE_PREFIX = 'AHMADI_EMPLOYEE_QUEUE_V1::';
+  const SUBSCRIBER_ACCOUNT_CACHE_PREFIX = 'AHMADI_SUBSCRIBER_ACCOUNT_CACHE_V1::';
+  const SUBSCRIBER_ACCOUNT_QUEUE_PREFIX = 'AHMADI_SUBSCRIBER_ACCOUNT_QUEUE_V1::';
   const QUEUE_PREFIX = 'AHMADI_SYNC_QUEUE_V1::';
   const META_PREFIX = 'AHMADI_SYNC_META_V1::';
   const DEFAULT_DATASETS = ['settings','subscribers','regions','distributionBoards','meters','invoices','accounts','movements','logs','tasks','chats','backups'];
@@ -158,7 +161,10 @@
         {sql:`CREATE TRIGGER IF NOT EXISTS trg_${tables.employees}_owner_password_update BEFORE UPDATE OF password_hash ON ${tables.employees} WHEN EXISTS(SELECT 1 FROM ${tables.companies} c WHERE c.id=NEW.company_id AND c.password_hash=NEW.password_hash) BEGIN SELECT RAISE(ABORT,'employee_password_conflict'); END`},
         {sql:`CREATE TABLE IF NOT EXISTS ${tables.subscriptionUsers} (id TEXT PRIMARY KEY, company_id TEXT NOT NULL, subscription_id TEXT NOT NULL, subscriber_id TEXT NOT NULL DEFAULT '', username TEXT NOT NULL COLLATE NOCASE, password_hash TEXT NOT NULL, network_name TEXT NOT NULL DEFAULT '', manager_name TEXT NOT NULL DEFAULT '', subscription_type TEXT NOT NULL DEFAULT '', end_date TEXT, frozen INTEGER NOT NULL DEFAULT 0, updated_at INTEGER NOT NULL)`},
         {sql:`CREATE INDEX IF NOT EXISTS idx_${tables.subscriptionUsers}_auth ON ${tables.subscriptionUsers}(username COLLATE NOCASE,password_hash)`},
-        {sql:`CREATE INDEX IF NOT EXISTS idx_${tables.subscriptionUsers}_company ON ${tables.subscriptionUsers}(company_id,updated_at)`}
+        {sql:`CREATE INDEX IF NOT EXISTS idx_${tables.subscriptionUsers}_company ON ${tables.subscriptionUsers}(company_id,updated_at)`},
+        {sql:`CREATE TABLE IF NOT EXISTS ${tables.subscriberAccounts} (id TEXT PRIMARY KEY, company_id TEXT NOT NULL, subscriber_id TEXT NOT NULL, name TEXT NOT NULL DEFAULT '', username TEXT NOT NULL COLLATE NOCASE, password_hash TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'active', created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)`},
+        {sql:`CREATE INDEX IF NOT EXISTS idx_${tables.subscriberAccounts}_company ON ${tables.subscriberAccounts}(company_id,updated_at)`},
+        {sql:`CREATE INDEX IF NOT EXISTS idx_${tables.subscriberAccounts}_auth ON ${tables.subscriberAccounts}(username COLLATE NOCASE,password_hash)`}
       ]);
       // Migrate the shared employee table for the users app: employees now sign in with username + password.
       const [employeeColumnsResult]=await pipeline([{sql:`PRAGMA table_info(${tables.employees})`}]);
@@ -189,6 +195,15 @@
   function writeEmployeeCache(companyId,rows){localStorage.setItem(employeeCacheKey(companyId),JSON.stringify(Array.isArray(rows)?rows:[]));}
   function readEmployeeQueue(companyId){return safeJson(localStorage.getItem(employeeQueueKey(companyId)),[])||[];}
   function writeEmployeeQueue(companyId,ops){localStorage.setItem(employeeQueueKey(companyId),JSON.stringify(Array.isArray(ops)?ops:[]));}
+  function subscriberAccountCacheKey(companyId){return SUBSCRIBER_ACCOUNT_CACHE_PREFIX+String(companyId||'');}
+  function subscriberAccountQueueKey(companyId){return SUBSCRIBER_ACCOUNT_QUEUE_PREFIX+String(companyId||'');}
+  function readSubscriberAccountCache(companyId){return safeJson(localStorage.getItem(subscriberAccountCacheKey(companyId)),[])||[];}
+  function writeSubscriberAccountCache(companyId,rows){localStorage.setItem(subscriberAccountCacheKey(companyId),JSON.stringify(Array.isArray(rows)?rows:[]));}
+  function readSubscriberAccountQueue(companyId){return safeJson(localStorage.getItem(subscriberAccountQueueKey(companyId)),[])||[];}
+  function writeSubscriberAccountQueue(companyId,ops){localStorage.setItem(subscriberAccountQueueKey(companyId),JSON.stringify(Array.isArray(ops)?ops:[]));}
+  function clearSubscriberAccountAuth(accountId){
+    for(let i=localStorage.length-1;i>=0;i--){const k=localStorage.key(i);if(!k||!k.startsWith(USER_AUTH_PREFIX))continue;const v=safeJson(localStorage.getItem(k),null);if(v?.subscriberAccountId===accountId)localStorage.removeItem(k);}
+  }
   function cacheAuth(session){
     if(session?.username&&session?.authHash)cacheUserAuth(session);
     if(!session?.companyKey||!session?.authHash)return;
@@ -330,17 +345,35 @@
       [empResult]=await pipeline([{sql:`SELECT id,company_id,name,username,status,permissions,password_hash,created_at,updated_at FROM ${tables.employees} WHERE lower(username)=lower(?) AND password_hash=? AND company_id LIKE 'network::%' LIMIT 2`,args:[user,hash]}]);
     }
     const emp=rowsToObjects(empResult)[0];
-    if(!emp)throw new Error('اسم المستخدم أو كلمة المرور غير صحيحة.');
-    if(emp.status!=='active')throw new Error('حساب الموظف موقوف.');
-    const parts=parseNetworkCompanyId(emp.company_id);if(!parts)throw new Error('تعذر تحديد الاشتراك المرتبط بحساب الموظف.');
+    if(emp){
+      if(emp.status!=='active')throw new Error('حساب الموظف موقوف.');
+      const parts=parseNetworkCompanyId(emp.company_id);if(!parts)throw new Error('تعذر تحديد الاشتراك المرتبط بحساب الموظف.');
+      const source=await subscriptionRowById(parts.parentCompanyId,parts.subscriptionId);assertSubscriptionAvailable(source);
+      const session={companyId:emp.company_id,parentCompanyId:parts.parentCompanyId,subscriptionId:parts.subscriptionId,subscriberId:source?.subscriber_id||'',username:user,companyName:String(source?.network_name||'شبكة الكهرباء'),ownerName:String(source?.manager_name||''),actorType:'employee',actorId:emp.id,employeeId:emp.id,actorName:emp.name||user,permissions:safeJson(emp.permissions,[])||[],employeeUpdatedAt:Number(emp.updated_at||0),authHash:hash,cachedAt:nowMs()};
+      cacheUserAuth(session);activeCompany={...session};ensureSchema().catch(()=>{});return session;
+    }
+
+    // Read-only subscriber accounts created from إدارة المشتركين.
+    let subResult;
+    try{[subResult]=await pipeline([{sql:`SELECT id,company_id,subscriber_id,name,username,status,password_hash,created_at,updated_at FROM ${tables.subscriberAccounts} WHERE lower(username)=lower(?) AND password_hash=? AND company_id LIKE 'network::%' LIMIT 2`,args:[user,hash]}]);}
+    catch(_){await ensureSchema();[subResult]=await pipeline([{sql:`SELECT id,company_id,subscriber_id,name,username,status,password_hash,created_at,updated_at FROM ${tables.subscriberAccounts} WHERE lower(username)=lower(?) AND password_hash=? AND company_id LIKE 'network::%' LIMIT 2`,args:[user,hash]}]);}
+    const subAccount=rowsToObjects(subResult)[0];
+    if(!subAccount)throw new Error('اسم المستخدم أو كلمة المرور غير صحيحة.');
+    if(subAccount.status!=='active')throw new Error('حساب المشترك مجمد حالياً.');
+    const parts=parseNetworkCompanyId(subAccount.company_id);if(!parts)throw new Error('تعذر تحديد الاشتراك المرتبط بحساب المشترك.');
     const source=await subscriptionRowById(parts.parentCompanyId,parts.subscriptionId);assertSubscriptionAvailable(source);
-    const session={companyId:emp.company_id,parentCompanyId:parts.parentCompanyId,subscriptionId:parts.subscriptionId,subscriberId:source?.subscriber_id||'',username:user,companyName:String(source?.network_name||'شبكة الكهرباء'),ownerName:String(source?.manager_name||''),actorType:'employee',actorId:emp.id,employeeId:emp.id,actorName:emp.name||user,permissions:safeJson(emp.permissions,[])||[],employeeUpdatedAt:Number(emp.updated_at||0),authHash:hash,cachedAt:nowMs()};
-    cacheUserAuth(session);activeCompany={...session};
-    ensureSchema().catch(()=>{});
-    return session;
+    const subscriberName=await subscriberNameFor(subAccount.company_id,subAccount.subscriber_id).catch(()=>subAccount.name||user);
+    const session={companyId:subAccount.company_id,parentCompanyId:parts.parentCompanyId,subscriptionId:parts.subscriptionId,subscriberId:subAccount.subscriber_id,username:user,companyName:String(source?.network_name||'شبكة الكهرباء'),ownerName:String(source?.manager_name||''),actorType:'subscriber',actorId:subAccount.id,subscriberAccountId:subAccount.id,actorName:subAccount.name||subscriberName||user,permissions:['home.view','subscribers.view','subscriptions.view','flows.view'],subscriberUpdatedAt:Number(subAccount.updated_at||0),authHash:hash,cachedAt:nowMs()};
+    cacheUserAuth(session);activeCompany={...session};ensureSchema().catch(()=>{});return session;
   }
   async function validateUser(session){
     if(!session?.companyId)return false;if(!isOnline())return true;await ensureSchema();
+    if(session.actorType==='subscriber'){
+      const [r]=await pipeline([{sql:`SELECT id,company_id,subscriber_id,name,username,password_hash,status,updated_at FROM ${tables.subscriberAccounts} WHERE id=? AND company_id=? LIMIT 1`,args:[session.subscriberAccountId||session.actorId,session.companyId]}]);const row=rowsToObjects(r)[0];
+      if(!row||row.status!=='active'||row.password_hash!==session.authHash||String(row.username||'').toLowerCase()!==String(session.username||'').toLowerCase()){clearSubscriberAccountAuth(session.subscriberAccountId||session.actorId);return false;}
+      const parts=parseNetworkCompanyId(session.companyId);const source=parts?await subscriptionRowById(parts.parentCompanyId,parts.subscriptionId):null;try{assertSubscriptionAvailable(source)}catch(_){clearSubscriberAccountAuth(session.subscriberAccountId||session.actorId);return false;}
+      const next={...session,subscriberId:row.subscriber_id,actorName:row.name||session.actorName,permissions:['home.view','subscribers.view','subscriptions.view','flows.view'],subscriberUpdatedAt:Number(row.updated_at||0),companyName:String(source?.network_name||session.companyName||''),ownerName:String(source?.manager_name||session.ownerName||'')};cacheUserAuth(next);activeCompany={...next};return next;
+    }
     if(session.actorType==='employee'){
       const [r]=await pipeline([{sql:`SELECT id,company_id,name,username,password_hash,status,permissions,updated_at FROM ${tables.employees} WHERE id=? AND company_id=? LIMIT 1`,args:[session.employeeId||session.actorId,session.companyId]}]);const row=rowsToObjects(r)[0];
       if(!row||row.status!=='active'||row.password_hash!==session.authHash||String(row.username||'').toLowerCase()!==String(session.username||'').toLowerCase()){clearUserAuth(session);return false;}
@@ -430,13 +463,14 @@
     activeCompany=company?{...company}:null;
     const q=activeCompanyId?readQueue(activeCompanyId):{};
     updateStatus({mode:isOnline()?'idle':'offline',pending:Object.keys(q).length,message:isOnline()?'':'يعمل محلياً — ستتم المزامنة عند عودة الإنترنت'});
-    if(isOnline())flushEmployeeOps(activeCompanyId).catch(()=>{});
+    if(isOnline()&&activeCompany?.actorType!=='subscriber')flushEmployeeOps(activeCompanyId).catch(()=>{});
     restartPolling();
   }
 
   function detach(){adapter=null;activeCompanyId='';activeCompany=null;clearTimeout(pushTimer);clearTimeout(pollTimer);pushTimer=0;pollTimer=0;updateStatus({mode:'idle',pending:0,message:''});}
 
   function markChanged(dataset){
+    if(activeCompany?.actorType==='subscriber')return;
     if(!adapter||!activeCompanyId||!DEFAULT_DATASETS.includes(dataset))return;
     const q=readQueue();q[dataset]=nowMs();writeQueue(q);
     updateStatus({mode:isOnline()?'pending':'offline',message:isOnline()?'توجد تغييرات قيد المزامنة':'محفوظ محلياً — بانتظار الإنترنت'});
@@ -446,6 +480,7 @@
   function schedulePush(){clearTimeout(pushTimer);pushTimer=setTimeout(()=>{pushPending().catch(()=>{});},syncCfg.writeDebounceMs);}
 
   async function pushPending(){
+    if(activeCompany?.actorType==='subscriber')return false;
     if(inFlight||!adapter||!activeCompanyId)return false;
     const q=readQueue();const names=Object.keys(q).filter(n=>DEFAULT_DATASETS.includes(n));
     if(!names.length){updateStatus({mode:isOnline()?'synced':'offline',pending:0,message:isOnline()?'تمت المزامنة':'يعمل بدون إنترنت'});return true;}
@@ -475,7 +510,7 @@
     inFlight=true;updateStatus({mode:'syncing',message:'جارٍ جلب آخر التغييرات...'});
     try{
       await ensureSchema();
-      const q=readQueue();
+      const q=activeCompany?.actorType==='subscriber'?{}:readQueue();
       const meta=readMeta();
       const since=forceAll?0:Number(meta.lastPullAt||0);
       const [result]=await pipeline([{sql:`SELECT dataset,payload,updated_at FROM ${tables.state} WHERE company_id=? AND updated_at>? ORDER BY updated_at ASC`,args:[activeCompanyId,since]}]);
@@ -499,6 +534,7 @@
   async function initialSync(){
     if(!adapter||!activeCompanyId)return false;
     if(!isOnline()){updateStatus({mode:'offline',message:'يعمل محلياً — ستتم المزامنة عند عودة الإنترنت'});return false;}
+    if(activeCompany?.actorType==='subscriber')return pullChanges(true);
     await ensureSchema();
     const [countResult]=await pipeline([{sql:`SELECT COUNT(*) AS count FROM ${tables.state} WHERE company_id=?`,args:[activeCompanyId]}]);
     const count=Number(rowsToObjects(countResult)[0]?.count||0);
@@ -514,7 +550,8 @@
   }
 
   async function syncNow(){
-    if(!isOnline()){updateStatus({mode:'offline',message:'لا يوجد إنترنت — التغييرات محفوظة محلياً'});return false;}
+    if(!isOnline()){updateStatus({mode:'offline',message:'لا يوجد إنترنت — البيانات المحلية متاحة'});return false;}
+    if(activeCompany?.actorType==='subscriber')return pullChanges(false);
     if(Object.keys(readQueue()).length)await pushPending();
     return pullChanges(false);
   }
@@ -523,7 +560,7 @@
     clearTimeout(pollTimer);pollTimer=0;
     if(!adapter||!activeCompanyId)return;
     const delay=document.hidden?syncCfg.hiddenPollMs:syncCfg.visiblePollMs;
-    pollTimer=setTimeout(async()=>{try{if(isOnline()){if(Object.keys(readQueue()).length)await pushPending();else await pullChanges(false);}}catch(_){}finally{restartPolling();}},delay);
+    pollTimer=setTimeout(async()=>{try{if(isOnline()){if(activeCompany?.actorType==='subscriber')await pullChanges(false);else if(Object.keys(readQueue()).length)await pushPending();else await pullChanges(false);}}catch(_){}finally{restartPolling();}},delay);
   }
 
   async function flushEmployeeOps(companyId=activeCompanyId){
@@ -594,6 +631,46 @@
     const cache=readEmployeeCache(companyId).filter(x=>x.id!==id);writeEmployeeCache(companyId,cache);clearEmployeeAuth(id);if(!isOnline()){queueEmployeeOp(companyId,{type:'delete',id});return true;}await ensureSchema();await pipeline([{sql:`DELETE FROM ${tables.employees} WHERE id=? AND company_id=?`,args:[id,companyId]}]);return true;
   }
 
+  function queueSubscriberAccountOp(companyId,op){const q=readSubscriberAccountQueue(companyId);q.push({queueId:uid('saq'),...op});writeSubscriberAccountQueue(companyId,q);}
+  async function flushSubscriberAccountOps(companyId=activeCompanyId){
+    if(!companyId||!isOnline())return false;const ops=readSubscriberAccountQueue(companyId);if(!ops.length)return true;await ensureSchema();
+    for(const op of [...ops]){
+      if(op.type==='create'){await pipeline([{sql:`INSERT INTO ${tables.subscriberAccounts}(id,company_id,subscriber_id,name,username,password_hash,status,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET subscriber_id=excluded.subscriber_id,name=excluded.name,username=excluded.username,password_hash=excluded.password_hash,status=excluded.status,updated_at=excluded.updated_at`,args:[op.id,companyId,op.subscriberId,op.name||'',op.username,op.passwordHash,op.status||'active',op.createdAt||nowMs(),nowMs()]}]);}
+      if(op.type==='update'){const p=op.patch||{},sets=[],args=[];if('subscriberId'in p){sets.push('subscriber_id=?');args.push(p.subscriberId)}if('name'in p){sets.push('name=?');args.push(p.name)}if('username'in p){sets.push('username=?');args.push(p.username)}if(p.passwordHash){sets.push('password_hash=?');args.push(p.passwordHash)}if('status'in p){sets.push('status=?');args.push(p.status)}if(sets.length){sets.push(`updated_at=${serverNowSql()}`);args.push(op.id,companyId);await pipeline([{sql:`UPDATE ${tables.subscriberAccounts} SET ${sets.join(',')} WHERE id=? AND company_id=?`,args}]);}}
+      if(op.type==='delete'){await pipeline([{sql:`DELETE FROM ${tables.subscriberAccounts} WHERE id=? AND company_id=?`,args:[op.id,companyId]}]);}
+      const current=readSubscriberAccountQueue(companyId);const i=current.findIndex(x=>x.queueId===op.queueId);if(i>=0){current.splice(i,1);writeSubscriberAccountQueue(companyId,current);}
+    }return true;
+  }
+  async function listSubscriberAccounts(companyId=activeCompanyId){
+    if(!companyId)return [];if(!isOnline())return readSubscriberAccountCache(companyId);await flushSubscriberAccountOps(companyId);await ensureSchema();
+    const [r]=await pipeline([{sql:`SELECT id,company_id,subscriber_id,name,username,status,created_at,updated_at FROM ${tables.subscriberAccounts} WHERE company_id=? ORDER BY created_at DESC`,args:[companyId]}]);const rows=rowsToObjects(r);writeSubscriberAccountCache(companyId,rows);return rows;
+  }
+  async function assertLoginUsernameAvailable(username,excludeId=''){
+    if(!isOnline())return;await ensureSchema();const u=String(username||'').trim();
+    const [sa,emp,own]=await pipeline([
+      {sql:`SELECT COUNT(*) AS count FROM ${tables.subscriberAccounts} WHERE lower(username)=lower(?) AND id<>?`,args:[u,excludeId||'']},
+      {sql:`SELECT COUNT(*) AS count FROM ${tables.employees} WHERE lower(username)=lower(?)`,args:[u]},
+      {sql:`SELECT COUNT(*) AS count FROM ${tables.subscriptionUsers} WHERE lower(username)=lower(?)`,args:[u]}
+    ]);if([sa,emp,own].some(r=>Number(rowsToObjects(r)[0]?.count||0)>0))throw new Error('اسم المستخدم مستخدم مسبقاً.');
+  }
+  async function createSubscriberAccount(companyId,payload={}){
+    if(!companyId)throw new Error('تعذر تحديد الشبكة.');const subscriberId=String(payload.subscriberId||''),name=String(payload.name||'').trim(),username=String(payload.username||'').trim(),password=String(payload.password||'');
+    if(!subscriberId)throw new Error('اختر المشترك.');if(username.length<3)throw new Error('اسم المستخدم يجب ألا يقل عن 3 خانات.');if(password.length<4)throw new Error('كلمة المرور يجب ألا تقل عن 4 خانات.');
+    const passwordHash=sha256(password),id=uid('subacc'),row={id,company_id:companyId,subscriber_id:subscriberId,name,username,status:payload.status==='inactive'?'inactive':'active',created_at:nowMs(),updated_at:nowMs()};
+    if(readSubscriberAccountCache(companyId).some(x=>String(x.username||'').toLowerCase()===username.toLowerCase()))throw new Error('اسم المستخدم مستخدم مسبقاً.');
+    if(isOnline()){await assertLoginUsernameAvailable(username);await pipeline([{sql:`INSERT INTO ${tables.subscriberAccounts}(id,company_id,subscriber_id,name,username,password_hash,status,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?)`,args:[id,companyId,subscriberId,name,username,passwordHash,row.status,row.created_at,row.updated_at]}]);}
+    else queueSubscriberAccountOp(companyId,{type:'create',id,subscriberId,name,username,passwordHash,status:row.status,createdAt:row.created_at});
+    const cache=readSubscriberAccountCache(companyId);cache.unshift(row);writeSubscriberAccountCache(companyId,cache);return row;
+  }
+  async function updateSubscriberAccount(companyId,id,patch={}){
+    const cache=readSubscriberAccountCache(companyId),row=cache.find(x=>String(x.id)===String(id));if(!row)throw new Error('حساب المشترك غير موجود.');const p={};
+    if('subscriberId'in patch)p.subscriberId=String(patch.subscriberId||'');if('name'in patch)p.name=String(patch.name||'').trim();if('username'in patch)p.username=String(patch.username||'').trim();if('status'in patch)p.status=patch.status==='inactive'?'inactive':'active';if(patch.password){if(String(patch.password).length<4)throw new Error('كلمة المرور يجب ألا تقل عن 4 خانات.');p.passwordHash=sha256(patch.password);}
+    if(p.username!==undefined){if(p.username.length<3)throw new Error('اسم المستخدم يجب ألا يقل عن 3 خانات.');if(isOnline())await assertLoginUsernameAvailable(p.username,id);}
+    Object.assign(row,{...(p.subscriberId!==undefined?{subscriber_id:p.subscriberId}:{}),...(p.name!==undefined?{name:p.name}:{}),...(p.username!==undefined?{username:p.username}:{}),...(p.status!==undefined?{status:p.status}:{}),updated_at:nowMs()});writeSubscriberAccountCache(companyId,cache);if(p.passwordHash||p.username!==undefined||p.status==='inactive')clearSubscriberAccountAuth(id);
+    if(!isOnline()){queueSubscriberAccountOp(companyId,{type:'update',id,patch:p});return row;}await ensureSchema();const sets=[],args=[];if(p.subscriberId!==undefined){sets.push('subscriber_id=?');args.push(p.subscriberId)}if(p.name!==undefined){sets.push('name=?');args.push(p.name)}if(p.username!==undefined){sets.push('username=?');args.push(p.username)}if(p.passwordHash){sets.push('password_hash=?');args.push(p.passwordHash)}if(p.status!==undefined){sets.push('status=?');args.push(p.status)}sets.push(`updated_at=${serverNowSql()}`);args.push(id,companyId);await pipeline([{sql:`UPDATE ${tables.subscriberAccounts} SET ${sets.join(',')} WHERE id=? AND company_id=?`,args}]);return row;
+  }
+  async function deleteSubscriberAccount(companyId,id){const cache=readSubscriberAccountCache(companyId).filter(x=>String(x.id)!==String(id));writeSubscriberAccountCache(companyId,cache);clearSubscriberAccountAuth(id);if(!isOnline()){queueSubscriberAccountOp(companyId,{type:'delete',id});return true;}await ensureSchema();await pipeline([{sql:`DELETE FROM ${tables.subscriberAccounts} WHERE id=? AND company_id=?`,args:[id,companyId]}]);return true;}
+
   async function adminState(){
     if(!isOnline())throw new Error('لوحة الإدارة تحتاج إنترنت.');
     await ensureSchema();
@@ -640,7 +717,7 @@
     await ensureSchema();const [r]=await pipeline([{sql:`SELECT COUNT(*) AS total, SUM(CASE WHEN status='active' AND (expires_at IS NULL OR expires_at>=${serverNowSql()}) THEN 1 ELSE 0 END) AS active, SUM(CASE WHEN expires_at IS NOT NULL AND expires_at<${serverNowSql()} THEN 1 ELSE 0 END) AS expired FROM ${tables.companies}`}]);return rowsToObjects(r)[0]||{total:0,active:0,expired:0};
   }
 
-  window.addEventListener('online',()=>{updateStatus({mode:'pending',message:'عاد الإنترنت — جارٍ مزامنة البيانات'});flushEmployeeOps().catch(()=>{}).finally(()=>syncNow().catch(()=>{}));restartPolling();});
+  window.addEventListener('online',()=>{updateStatus({mode:'pending',message:'عاد الإنترنت — جارٍ مزامنة البيانات'});if(activeCompany?.actorType==='subscriber'){syncNow().catch(()=>{});restartPolling();return}Promise.all([flushEmployeeOps().catch(()=>{}),flushSubscriberAccountOps().catch(()=>{})]).finally(()=>syncNow().catch(()=>{}));restartPolling();});
   window.addEventListener('offline',()=>{updateStatus({mode:'offline',message:'يعمل بدون إنترنت — التغييرات محفوظة محلياً'});restartPolling();});
   document.addEventListener('visibilitychange',()=>{if(!document.hidden&&isOnline())syncNow().catch(()=>{});restartPolling();});
   window.addEventListener('focus',()=>{if(isOnline())syncNow().catch(()=>{});});
@@ -652,6 +729,7 @@
     getStatus:()=>({...status}),getActiveCompany:()=>activeCompany?{...activeCompany}:null,
     adminState,bootstrapAdmin,adminLogin,listCompanies,createCompany,updateCompany,deleteCompany,companyStats,
     listEmployees,createEmployee,updateEmployee,deleteEmployee,flushEmployeeOps,
+    listSubscriberAccounts,createSubscriberAccount,updateSubscriberAccount,deleteSubscriberAccount,flushSubscriberAccountOps,
     isOnline
   };
 })();

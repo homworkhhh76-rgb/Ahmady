@@ -838,3 +838,118 @@ img.r2-image-error{opacity:.55;background:rgba(223,125,131,.08);outline:1px dash
 html[data-theme="light"] .printer-paper-option{background:#fff;border-color:rgba(20,49,58,.12)}
 html[data-theme="light"] .printer-paper-option.active,html[data-theme="light"] .printer-paper-option:has(input:checked){background:rgba(var(--accent-rgb),.055)}
 @media(max-width:680px){.printer-paper-grid{grid-template-columns:1fr}.printer-paper-option{min-height:78px;padding:12px}.printer-settings-card{padding:12px}.v30-preview-box{max-width:100%;overflow:auto}.v30-preview-image{width:min(100%,420px)}}
+
+/* ===== V31.5 compact elevation patch =====
+   المطلوب: ظل قصير ومركز أسفل العنصر بدل الظل الواسع المنتشر.
+   لا يغيّر المقاسات أو الألوان أو توزيع الصفحة. */
+:root{
+  --v315-shadow-card:0 4px 7px -5px rgba(18,48,58,.34);
+  --v315-shadow-control:0 3px 6px -4px rgba(18,48,58,.38);
+  --v315-shadow-card-dark:0 4px 7px -5px rgba(0,0,0,.72);
+  --v315-shadow-control-dark:0 3px 6px -4px rgba(0,0,0,.78);
+}
+
+/* جميع البطاقات: بروز خفيف مباشرة من الأسفل، بدون انتشار جانبي كبير. */
+html[data-theme="light"] :is(
+  [class$="-card"],
+  [class*="-card "],
+  .metric,
+  .report-result-card,
+  .settings-detail-card,
+  .settings-access-section,
+  .v18-report-section,
+  .timeline-report-section,
+  .record-detail-summary,
+  .record-attachment,
+  .printer-paper-option
+){box-shadow:var(--v315-shadow-card)!important}
+
+html:not([data-theme="light"]) :is(
+  [class$="-card"],
+  [class*="-card "],
+  .metric,
+  .report-result-card,
+  .settings-detail-card,
+  .settings-access-section,
+  .v18-report-section,
+  .timeline-report-section,
+  .record-detail-summary,
+  .record-attachment,
+  .printer-paper-option
+){box-shadow:var(--v315-shadow-card-dark)!important}
+
+/* الحقول ومربعات البحث والفلاتر: نفس الفكرة، ظل رفيع تحت الإطار فقط. */
+html[data-theme="light"] :is(
+  .field,
+  .search-box,
+  .list-search,
+  .picker-search,
+  .date-input,
+  .v20-expense-filters>label,
+  .report-result-controls>label
+){box-shadow:var(--v315-shadow-control)!important}
+
+html:not([data-theme="light"]) :is(
+  .field,
+  .search-box,
+  .list-search,
+  .picker-search,
+  .date-input,
+  .v20-expense-filters>label,
+  .report-result-controls>label
+){box-shadow:var(--v315-shadow-control-dark)!important}
+
+/* الأزرار المرئية فقط؛ نستثني أزرار التنقل/القوائم الداخلية التي يجب أن تبقى مسطحة. */
+html[data-theme="light"] button:not(.bottom-link):not(.drawer-link):not(.summary-toggle):not(.select-button):not(.almezan-select-trigger):not(.picker-option){
+  box-shadow:var(--v315-shadow-control)!important;
+}
+html:not([data-theme="light"]) button:not(.bottom-link):not(.drawer-link):not(.summary-toggle):not(.select-button):not(.almezan-select-trigger):not(.picker-option){
+  box-shadow:var(--v315-shadow-control-dark)!important;
+}
+
+/* لا نضع ظلاً داخل الحقل المنسدل؛ الظل يبقى على إطار الحقل الخارجي فقط. */
+.field.dropdown-field :is(.select-button,.almezan-select-trigger),
+.field.has-select :is(.select-button,.almezan-select-trigger){box-shadow:none!important}
+
+/* عند التركيز نحافظ على البروز القصير ونضيف حلقة تركيز رقيقة. */
+html[data-theme="light"] .field:focus-within{
+  box-shadow:var(--v315-shadow-control),0 0 0 2px rgba(var(--accent-rgb),.09)!important;
+}
+html:not([data-theme="light"]) .field:focus-within{
+  box-shadow:var(--v315-shadow-control-dark),0 0 0 2px rgba(var(--accent-rgb),.11)!important;
+}
+
+/* الأزرار الرئيسية العائمة تبقى واضحة لكن بظل أقصر من السابق. */
+html[data-theme="light"] :is(.fab-main,.chat-send-v24){box-shadow:0 4px 7px -4px rgba(var(--accent-rgb),.48)!important}
+html:not([data-theme="light"]) :is(.fab-main,.chat-send-v24){box-shadow:0 4px 7px -4px rgba(0,0,0,.76)!important}
+
+/* ========================= V32 MAIN UX ========================= */
+.v32-theme-card,
+.profile-quick.v32-global-quick-card,
+.v32-contact-card,
+.v32-account-note{
+  border:1px solid rgba(var(--accent-rgb),.18)!important;
+  background:linear-gradient(145deg,rgba(var(--accent-rgb),.12),rgba(10,39,50,.86))!important;
+  border-radius:22px;padding:15px;margin-bottom:14px;
+}
+.hero.v32-theme-card{background:linear-gradient(135deg,rgba(var(--accent-rgb),.24),#0a2934 82%)!important}
+.v32-account-type{display:block;border-inline-start:1px solid var(--line);padding-inline-start:8px;margin-inline-start:2px;color:var(--soft);font-size:9px;white-space:nowrap}
+.v32-order-btn{position:relative;z-index:2;border:1px solid rgba(var(--accent-rgb),.24);background:rgba(var(--accent-rgb),.10);color:var(--teal2);border-radius:13px;min-height:38px;padding:7px 11px;display:inline-flex;align-items:center;justify-content:center;gap:7px;font:inherit;font-size:11px;white-space:nowrap}
+.v32-order-btn svg{width:17px;height:17px}.hero .v32-order-btn{position:absolute;left:18px;top:18px;background:rgba(0,0,0,.16);color:var(--soft)}
+.page-head>.v32-order-btn,.subscriber-profile-head>.v32-order-btn{margin-inline-start:auto;align-self:flex-start}.v32-order-floating{margin-bottom:12px}
+.v32-contact-card{margin-top:14px}.v32-contact-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px}.v32-contact-action{min-height:68px;border:1px solid var(--line2);background:rgba(var(--accent-rgb),.07);border-radius:16px;color:var(--soft);display:flex;align-items:center;justify-content:center;gap:8px;padding:10px;font-size:11px;text-align:center}.v32-contact-action svg{width:20px;height:20px;color:var(--teal2);flex:0 0 auto}
+.v32-subscriber-summary .metric,.v32-electric-metrics .metric{min-height:126px}.v32-static-metric{cursor:default}.v32-static-metric:active{transform:none!important}.v32-net-metric .metric-value{color:var(--gold)}
+.v32-profile-meter-summary{margin-top:14px}.v32-inline-actions{display:flex;align-items:center;gap:5px}.v32-inline-actions button{width:34px;height:34px;border:1px solid var(--line);border-radius:10px;background:rgba(var(--accent-rgb),.08);color:var(--teal2);display:grid;place-items:center}.v32-inline-actions svg{width:16px;height:16px}.v32-contact-list .row-card{align-items:center}
+.v32-net-breakdown{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.v32-net-breakdown>div{border:1px solid var(--line);border-radius:16px;background:var(--panel2);padding:14px}.v32-net-breakdown small{display:block;color:var(--muted);font-size:10px}.v32-net-breakdown strong{display:block;margin-top:6px;font-size:18px}.v32-net-breakdown .net{grid-column:1/-1;border-color:rgba(var(--accent-rgb),.24);background:rgba(var(--accent-rgb),.10)}.v32-net-breakdown .net strong{color:var(--gold);font-size:22px}
+.v32-order-panel{display:grid;gap:12px}.v32-order-section-title{margin-top:7px!important}.v32-order-list{display:grid;gap:7px}.v32-order-row{display:flex;align-items:center;justify-content:space-between;gap:12px;border:1px solid var(--line);border-radius:14px;background:var(--panel2);padding:9px 11px}.v32-order-row>span{font-size:12px}.v32-order-row>div{display:flex;gap:5px}.v32-order-row button{width:34px;height:32px;border:1px solid var(--line2);border-radius:9px;background:rgba(var(--accent-rgb),.08);color:var(--teal2)}.v32-order-row button:disabled{opacity:.28}
+.drawer-link.v32-menu-card{border:1px solid var(--line)!important;background:rgba(255,255,255,.035)!important;border-radius:14px!important}.drawer-link.v32-menu-card.active{border-color:rgba(var(--accent-rgb),.28)!important;background:rgba(var(--accent-rgb),.12)!important}.drawer-link.v32-menu-card:hover{background:rgba(var(--accent-rgb),.08)!important}
+.v32-account-note{display:flex;align-items:center;gap:11px}.v32-account-note>svg{width:24px;color:var(--teal2)}.v32-account-note strong,.v32-account-note small{display:block}.v32-account-note small{color:var(--muted);font-size:10px;margin-top:2px}.v32-subscriber-account-card .employee-card-info b[dir=ltr]{direction:ltr;text-align:right;unicode-bidi:plaintext}
+.fab-menu.v32-card-fab-menu{width:min(292px,calc(100vw - 88px))!important;max-width:292px!important;gap:8px!important}.fab-menu.v32-card-fab-menu .fab-item{width:100%!important;min-width:0!important;max-width:none!important;min-height:48px!important;border-radius:15px!important;background:linear-gradient(145deg,rgba(var(--accent-rgb),.14),rgba(10,44,54,.98))!important;padding:8px 12px!important;box-shadow:var(--v315-shadow-card-dark)!important}.fab-menu.v32-card-fab-menu .fab-item .fab-item-icon{border-radius:10px;background:rgba(var(--accent-rgb),.10)}
+@media(max-width:859px){.bottom-nav{grid-template-columns:repeat(6,minmax(0,1fr))!important;width:min(100%,820px)!important}.bottom-link{font-size:7.7px!important;padding-inline:0!important}.bottom-link span{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.v32-contact-grid{grid-template-columns:1fr}.hero .v32-order-btn{position:relative;left:auto;top:auto;margin-top:12px}.subscriber-profile-head>.v32-order-btn{width:100%;margin-top:8px}.page-head>.v32-order-btn{max-width:120px}.v32-net-breakdown{grid-template-columns:1fr}.v32-net-breakdown .net{grid-column:auto}}
+@media(max-width:420px){.bottom-link svg{width:17px!important;height:17px!important}.bottom-link{font-size:7px!important}.v32-order-btn span{display:none}.page-head>.v32-order-btn{width:40px;height:40px;padding:0}.v32-subscriber-summary .metric,.v32-electric-metrics .metric{min-height:112px}.v32-inline-actions{gap:3px}.v32-inline-actions button{width:31px;height:31px}}
+html[data-theme="light"] :is(.v32-theme-card,.profile-quick.v32-global-quick-card,.v32-contact-card,.v32-account-note){background:linear-gradient(145deg,rgba(var(--accent-rgb),.09),rgba(255,255,255,.98))!important;border-color:rgba(var(--accent-rgb),.17)!important;color:var(--text)!important}
+html[data-theme="light"] .hero.v32-theme-card{background:linear-gradient(135deg,rgba(var(--accent-rgb),.13),rgba(255,255,255,.98))!important}
+html[data-theme="light"] .hero .v32-order-btn{background:rgba(var(--accent-rgb),.08);color:var(--teal)}
+html[data-theme="light"] .v32-contact-action,html[data-theme="light"] .v32-order-row,html[data-theme="light"] .v32-net-breakdown>div,html[data-theme="light"] .drawer-link.v32-menu-card{background:rgba(var(--accent-rgb),.045)!important;color:var(--text)!important}
+html[data-theme="light"] .fab-menu.v32-card-fab-menu .fab-item{background:linear-gradient(145deg,rgba(var(--accent-rgb),.08),#fff)!important;color:var(--text)!important;box-shadow:var(--v315-shadow-card)!important}
+.sync-pill:has(.v32-account-type){flex-wrap:wrap}.sync-pill .v32-account-type{flex-basis:100%;width:100%;border-inline-start:0!important;padding-inline-start:15px!important;margin-inline-start:0!important;margin-top:-2px}

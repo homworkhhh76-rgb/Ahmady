@@ -7,7 +7,8 @@ window.AHMADI_TURSO_CONFIG = Object.freeze({
     state: 'ahmadi_state',
     admins: 'ahmadi_admins',
     employees: 'ahmadi_employees',
-    subscriptionUsers: 'ahmadi_subscription_users'
+    subscriptionUsers: 'ahmadi_subscription_users',
+    subscriberAccounts: 'ahmadi_subscriber_accounts'
   },
   sync: {
     visiblePollMs: 4000,
