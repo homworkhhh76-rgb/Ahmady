@@ -953,3 +953,17 @@ html[data-theme="light"] .hero .v32-order-btn{background:rgba(var(--accent-rgb),
 html[data-theme="light"] .v32-contact-action,html[data-theme="light"] .v32-order-row,html[data-theme="light"] .v32-net-breakdown>div,html[data-theme="light"] .drawer-link.v32-menu-card{background:rgba(var(--accent-rgb),.045)!important;color:var(--text)!important}
 html[data-theme="light"] .fab-menu.v32-card-fab-menu .fab-item{background:linear-gradient(145deg,rgba(var(--accent-rgb),.08),#fff)!important;color:var(--text)!important;box-shadow:var(--v315-shadow-card)!important}
 .sync-pill:has(.v32-account-type){flex-wrap:wrap}.sync-pill .v32-account-type{flex-basis:100%;width:100%;border-inline-start:0!important;padding-inline-start:15px!important;margin-inline-start:0!important;margin-top:-2px}
+
+/* ========================= V33 requested login + collapsible quick actions ========================= */
+.login-card{position:relative}
+.login-top-actions{position:absolute;top:18px;left:18px;z-index:3;display:flex;gap:8px}
+.login-mini-action{min-width:48px;height:42px;padding:0 10px;border:1px solid var(--line2);border-radius:13px;background:rgba(255,255,255,.055);color:var(--text);display:flex;align-items:center;justify-content:center;gap:6px;font-family:inherit;font-weight:600;cursor:pointer}
+.login-mini-action svg{width:18px;height:18px}.login-mini-action span{font-size:10px}
+.login-support{margin-top:18px;padding-top:15px;border-top:1px solid var(--line);display:grid;gap:9px}.login-support>span{font-size:10px;color:var(--muted);text-align:center}
+.login-support-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.login-support-actions button{min-height:46px;border:1px solid var(--line2);border-radius:14px;background:rgba(255,255,255,.04);color:var(--text);font-family:inherit;display:flex;align-items:center;justify-content:center;gap:8px;cursor:pointer}.login-support-actions button span,.login-support-actions button svg{width:18px;height:18px}.login-support-actions button b{font-size:10.5px;font-weight:500}
+.v33-collapsible-quick .profile-quick-title{cursor:pointer;display:flex!important;align-items:center;gap:10px;user-select:none}.v33-collapsible-quick .profile-quick-title>small{flex:1}.v33-quick-chevron{width:28px;height:28px;border:1px solid var(--line);border-radius:9px;display:grid;place-items:center;transition:transform .2s ease}.v33-quick-chevron svg{width:15px;height:15px}.v33-collapsible-quick:not(.open) .quick-grid{display:none!important}.v33-collapsible-quick.open .v33-quick-chevron{transform:rotate(180deg)}
+[data-summary="quick"] .summary-body{transition:.2s}.v33-subscriber-summary .metric-value,.v33-meter-summary .metric-value,.v33-flow-summary .metric-value{font-variant-numeric:tabular-nums}
+html[data-theme="light"] .login-mini-action,html[data-theme="light"] .login-support-actions button{background:#f8fafb!important;color:var(--text)!important;border-color:rgba(20,49,58,.12)!important}
+html[lang="en"] .login-top-actions{left:auto;right:18px}
+@media(max-width:520px){.login-top-actions{top:14px;left:14px}.login-card{padding-top:24px}.login-support-actions{grid-template-columns:1fr 1fr}.login-support-actions button{min-height:44px}}
+.profile-quick.v32-global-quick-card:not(.open) .quick-grid{display:none!important}

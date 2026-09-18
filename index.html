@@ -12,14 +12,19 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=32.0.0">
+  <link rel="stylesheet" href="styles.css?v=33.0.0">
 </head>
 <body>
   <section id="loginView" class="login-view">
     <div class="login-card">
       <div class="brand-lockup">
         <img src="logo.jpg" alt="شعار الأحمدي" class="brand-logo">
-        <div><strong>الأحمدي</strong><span>إدارة المشتركين والكهرباء</span></div>
+        <div><strong>الأحمدي</strong><span>إدارة شبكات الكهرباء</span></div>
+      </div>
+      <div class="login-top-actions">
+        <button id="loginLanguageBtn" class="login-mini-action" type="button" aria-label="تغيير اللغة" title="تغيير اللغة">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a15 15 0 0 1 0 18M12 3a15 15 0 0 0 0 18"/></svg><span id="loginLanguageLabel">EN</span>
+        </button>
       </div>
       <div class="login-copy">
         <span class="eyebrow">تطبيق المستخدمين</span>
@@ -31,6 +36,13 @@
         <label class="field"><span>كلمة المرور</span><input id="password" type="password" autocomplete="current-password" placeholder="أدخل كلمة المرور" required></label>
         <button class="primary-btn" type="submit"><span>دخول إلى المنصة</span><span class="btn-icon" data-icon="arrow-left"></span></button>
       </form>
+      <div class="login-support">
+        <span>الدعم الفني</span>
+        <div class="login-support-actions">
+          <button type="button" data-v33-login-support="call" aria-label="اتصال مباشر بمدير التطبيق"><span data-icon="phone"></span><b>اتصال مباشر</b></button>
+          <button type="button" data-v33-login-support="whatsapp" aria-label="التواصل مع مدير التطبيق على واتساب"><span data-icon="whatsapp"></span><b>واتساب</b></button>
+        </div>
+      </div>
       <div class="login-meta"><span id="loginHint">يعمل حساب المدير والموظف والمشترك بدون إنترنت بعد أول تسجيل دخول ناجح على الجهاز.</span></div>
     </div>
   </section>
@@ -70,9 +82,9 @@
   <div id="toastRoot" class="toast-root" aria-live="polite"></div>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/aws-sdk/2.1500.0/aws-sdk.min.js"></script>
-  <script src="r2-storage.js?v=30.0.0"></script>
+  <script src="r2-storage.js?v=33.0.0"></script>
   <script src="turso-config.js"></script>
-  <script src="turso-sync.js?v=32.0.0"></script>
-  <script src="app.js?v=32.0.0"></script>
+  <script src="turso-sync.js?v=33.0.0"></script>
+  <script src="app.js?v=33.0.0"></script>
 </body>
 </html>
